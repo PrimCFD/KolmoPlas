@@ -21,7 +21,7 @@ plugins:
   - lib: libphysics_fluids.so
 
 program:
-  key: les
+  key: fluids
   params:
     # operator spacings (2π box / 128)
     dx: "0.04908738521234052"

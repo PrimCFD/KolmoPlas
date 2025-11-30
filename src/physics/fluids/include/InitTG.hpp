@@ -10,7 +10,6 @@ namespace fluids
 struct InitTG final : core::master::plugin::IAction
 {
     InitTG(double Lx, double Ly, double Lz, double U0, void* mpi_comm);
-
     const core::master::plugin::ActionInfo& info() const noexcept override { return info_; }
     void execute(const core::master::MeshTileView& tile, core::master::FieldCatalog& fields,
                  double /*dt*/) override;

@@ -71,6 +71,13 @@ struct Predictor final : core::master::plugin::IAction
         diff_hist_len_ = 0;
     }
 
+    void set_forcing(double fx, double fy, double fz)
+    {
+        fx_ = fx;
+        fy_ = fy;
+        fz_ = fz;
+    }
+
   private:
     core::master::plugin::ActionInfo info_;
     double rho_, nu_, dx_, dy_, dz_;
@@ -109,6 +116,11 @@ struct Predictor final : core::master::plugin::IAction
 
     void push_diff_hist(const std::vector<double>& Du, const std::vector<double>& Dv,
                         const std::vector<double>& Dw);
+
+    // Body forces
+    double fx_ = 0.0;
+    double fy_ = 0.0;
+    double fz_ = 0.0;
 };
 
 std::shared_ptr<core::master::plugin::IAction> make_predictor(const core::master::plugin::KV& kv,

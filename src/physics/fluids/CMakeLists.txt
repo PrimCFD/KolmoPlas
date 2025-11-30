@@ -8,6 +8,7 @@ set(SRC
     src/Program.cpp
     src/ProjectionLoop.cpp
     src/InitTG.cpp
+    src/InitChannel.cpp
     src/SGS.cpp
     src/MomentumPredictor.cpp
     src/PressurePoisson.cpp

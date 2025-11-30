@@ -47,7 +47,7 @@ plugins:
 
 # Program selector + free-form KV passed to plugin (strings on both sides)
 program:
-  key: les
+  key: fluids
   params:
     dx: "1"
     dy: "1" 

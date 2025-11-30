@@ -137,9 +137,9 @@ function(add_fluids_case name)
 
 endfunction()
 
-# Cases: - Keep cavity fast: force sequential launch (1 rank) - Force MPI for TG
-# to exercise multi rank plumbing (1 rank) add_fluids_case(cavity32 MODE mpi NP
-# 2)
+# Cases: - Keep cavity fast: force sequential launch (1 rank) - MPI for TG
+add_fluids_case(cavity256 MODE mpi NP 1)
+add_fluids_case(channel128 MODE mpi NP 4)
 add_fluids_case(tgv128 MODE mpi NP 8)
 
 # Assert TG decay at final time (2% rel tol) add_tgv_decay_check( tgv128 0.1

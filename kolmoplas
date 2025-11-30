@@ -1,0 +1,271 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent
+
+
+def run_script(script_rel_path, extra_args, use_python=False, env=None):
+    """
+    Run a script located under <repo_root>/scripts.
+
+    script_rel_path: e.g. "build.sh"
+    extra_args: list of extra CLI args to forward
+    use_python: whether to run via python3 script.py ...
+    env: optional environment overrides (merged with os.environ)
+    """
+    scripts_dir = REPO_ROOT / "scripts"
+    script_path = scripts_dir / script_rel_path
+    if not script_path.exists():
+        print(f"Error: script not found: {script_path}", file=sys.stderr)
+        sys.exit(1)
+
+    if use_python:
+        cmd = ["python3", str(script_path), *extra_args]
+    else:
+        cmd = [str(script_path), *extra_args]
+
+    if os.environ.get("KOLMOPLAS_DEBUG"):
+        print("+", " ".join(cmd))
+
+    env_final = os.environ.copy()
+    if env:
+        env_final.update(env)
+
+    result = subprocess.call(cmd, env=env_final)
+    sys.exit(result)
+
+
+def run_regression_case(case_name: str, extra_args):
+    """
+    Run a single regression case as an 'example' by reusing
+    scripts/run_regression_tests.sh and CTest's name regex filter.
+
+    This assumes tests are named like:
+      regression::fluids::<case_name>::run
+    as in tests/fluids/CMakeLists.txt. :contentReference[oaicite:8]{index=8}
+    """
+    # CTest name regex to match only this case's 'run' test
+    regex = rf"^regression::fluids::{case_name}::run$"
+    env = {"CTEST_NAME_REGEX": regex}
+    # Forward any additional args to run_regression_tests.sh
+    run_script("run_regression_tests.sh", extra_args, env=env)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="kolmoplas",
+        description="KolmoPlas devOps CLI tool"
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # --- build ---
+    p_build = subparsers.add_parser(
+        "build",
+        help="Build the project (wrapper around scripts/build.sh)."
+    )
+    p_build.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Extra args passed through to build.sh"
+    )
+    p_build.set_defaults(
+        func=lambda ns: run_script("build.sh", ns.args)
+    )
+
+    # --- clean ---
+    p_clean = subparsers.add_parser(
+        "clean",
+        help="Clean build artifacts (wrapper around scripts/clean_build.sh)."
+    )
+    p_clean.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Extra args passed through to clean_build.sh"
+    )
+    p_clean.set_defaults(
+        func=lambda ns: run_script("clean_build.sh", ns.args)
+    )
+
+    # --- docs ---
+    p_docs = subparsers.add_parser(
+        "docs",
+        help="Build/serve docs (wrapper around scripts/build-docs.sh)."
+    )
+    p_docs.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Extra args passed through to build-docs.sh"
+    )
+    p_docs.set_defaults(
+        func=lambda ns: run_script("build-docs.sh", ns.args)
+    )
+
+    # --- test ---
+    p_test = subparsers.add_parser(
+        "test",
+        help="Run tests: unit, perf, or reg (wrappers around run_*.sh)."
+    )
+    test_subparsers = p_test.add_subparsers(dest="which", required=True)
+
+    # test unit
+    p_test_unit = test_subparsers.add_parser(
+        "unit",
+        help="Run unit tests (scripts/run_unit_tests.sh)."
+    )
+    p_test_unit.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Extra args passed through to run_unit_tests.sh"
+    )
+    p_test_unit.set_defaults(
+        func=lambda ns: run_script("run_unit_tests.sh", ns.args)
+    )
+
+    # test perf
+    p_test_perf = test_subparsers.add_parser(
+        "perf",
+        help="Run performance tests (scripts/run_perf_tests.sh)."
+    )
+    p_test_perf.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Extra args passed through to run_perf_tests.sh"
+    )
+    p_test_perf.set_defaults(
+        func=lambda ns: run_script("run_perf_tests.sh", ns.args)
+    )
+
+    # test reg
+    p_test_reg = test_subparsers.add_parser(
+        "reg",
+        help="Run regression test suite (scripts/run_regression_tests.sh)."
+    )
+    p_test_reg.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Extra args passed through to run_regression_tests.sh"
+    )
+    p_test_reg.set_defaults(
+        func=lambda ns: run_script("run_regression_tests.sh", ns.args)
+    )
+
+    # --- scaling ---
+    p_scaling = subparsers.add_parser(
+        "scaling",
+        help="Run or post-process scaling studies."
+    )
+    scaling_subparsers = p_scaling.add_subparsers(dest="which", required=True)
+
+    # scaling run
+    p_scaling_run = scaling_subparsers.add_parser(
+        "run",
+        help="Run scaling experiments (scripts/run_scaling.sh)."
+    )
+    p_scaling_run.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Extra args passed through to run_scaling.sh"
+    )
+    p_scaling_run.set_defaults(
+        func=lambda ns: run_script("run_scaling.sh", ns.args)
+    )
+
+    # scaling post
+    p_scaling_post = scaling_subparsers.add_parser(
+        "post",
+        help="Post-process scaling results (postprocess_scaling.py)."
+    )
+    p_scaling_post.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Extra args passed through to postprocess_scaling.py"
+    )
+    p_scaling_post.set_defaults(
+        func=lambda ns: run_script("postprocess_scaling.py", ns.args, use_python=True)
+    )
+
+    # --- extern-clean ---
+    p_extclean = subparsers.add_parser(
+        "clean-extern",
+        help="Clean extern/ (wrapper around scripts/clean_extern.sh)."
+    )
+    p_extclean.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Extra args passed through to clean_extern.sh"
+    )
+    # NOTE: if your script is named clean_extern.sh instead, change here.
+    p_extclean.set_defaults(
+        func=lambda ns: run_script("clean_extern.sh", ns.args)
+    )
+
+    # --- fmt (format all) ---
+    p_fmt = subparsers.add_parser(
+        "fmt",
+        help="Format C/C++/Fortran/CMake (wrapper around scripts/format_all.sh)."
+    )
+    p_fmt.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Extra args passed through to format_all.sh"
+    )
+    p_fmt.set_defaults(
+        func=lambda ns: run_script("format_all.sh", ns.args)
+    )
+
+    # --- prefetch (third-party deps) ---
+    p_prefetch = subparsers.add_parser(
+        "prefetch",
+        help="Prefetch third-party archives (wrapper around scripts/prefetch_third_party.sh)."
+    )
+    p_prefetch.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Extra args passed through to prefetch_third_party.sh"
+    )
+    p_prefetch.set_defaults(
+        func=lambda ns: run_script("prefetch_third_party.sh", ns.args)
+    )
+
+    # --- examples ---
+    p_examples = subparsers.add_parser(
+        "examples",
+        help="Run real solver examples backed by regression cases."
+    )
+    ex_subparsers = p_examples.add_subparsers(dest="which", required=True)
+
+    # examples run <case>
+    p_ex_run = ex_subparsers.add_parser(
+        "run",
+        help=(
+            "Run a named example case (e.g. tgv128, channel128) "
+            "by filtering regression tests."
+        )
+    )
+    p_ex_run.add_argument(
+        "case",
+        help="Example/regression case name (e.g. tgv128)"
+    )
+    p_ex_run.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help=(
+            "Extra args passed through to run_regression_tests.sh "
+            "(e.g. SKIP_BUILD=1 via env or extra CTest knobs)."
+        )
+    )
+    p_ex_run.set_defaults(
+        func=lambda ns: run_regression_case(ns.case, ns.args)
+    )
+
+    # Parse and dispatch
+    ns = parser.parse_args()
+    ns.func(ns)
+
+
+if __name__ == "__main__":
+    main()

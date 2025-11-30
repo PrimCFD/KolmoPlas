@@ -5,7 +5,7 @@ file(GLOB_RECURSE NUMERICS_HEADERS CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp")
 
 # C++ sources
-set(NUMERICS_SOURCES src/MacOps.cpp src/PoissonScalar.cpp)
+set(NUMERICS_SOURCES src/MacOps.cpp)
 
 # Fortran kernels
 set(NUMERICS_KERNELS kernels/kernels.f90)

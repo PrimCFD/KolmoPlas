@@ -84,7 +84,10 @@ std::shared_ptr<plugin::IAction> make_predictor(const plugin::KV& kv,
     const std::string adv = to_lower(get("advect", "on"));
     const bool adv_on = !(adv == "0" || adv == "false" || adv == "off" || adv == "no");
     P->set_advect_enabled(adv_on);
-
+    const double fx = to_d(get("fx", "0.0"), 0.0);
+    const double fy = to_d(get("fy", "0.0"), 0.0);
+    const double fz = to_d(get("fz", "0.0"), 0.0);
+    P->set_forcing(fx, fy, fz);
     return P;
 }
 
@@ -171,6 +174,7 @@ void Predictor::execute(const MeshTileView& tile, FieldCatalog& fields, double d
     const std::size_t Nu = (size_t) nxu_tot * nyu_tot * nzu_tot;
     const std::size_t Nv = (size_t) nxv_tot * nyv_tot * nzv_tot;
     const std::size_t Nw = (size_t) nxw_tot * nyw_tot * nzw_tot;
+    const double inv_rho = 1.0 / rho_;
     // Make sure halos for u^n, v^n, w^n are consistent across ranks
     // BEFORE we freeze the RHS for this timestep. This ensures that
     // the IMEX RHS, advection, and diffusion all see the same state.
@@ -337,6 +341,13 @@ void Predictor::execute(const MeshTileView& tile, FieldCatalog& fields, double d
                 ws_[q] += dt * Nw_ab[q];
         }
 
+        for (std::size_t q = 0; q < Nu; ++q)
+            us_[q] += dt * fx_ * inv_rho;
+        for (std::size_t q = 0; q < Nv; ++q)
+            vs_[q] += dt * fy_ * inv_rho;
+        for (std::size_t q = 0; q < Nw; ++q)
+            ws_[q] += dt * fz_ * inv_rho;
+
         std::memcpy(u_ptr, us_.data(), Nu * sizeof(double));
         std::memcpy(v_ptr, vs_.data(), Nv * sizeof(double));
         std::memcpy(w_ptr, ws_.data(), Nw * sizeof(double));
@@ -363,6 +374,14 @@ void Predictor::execute(const MeshTileView& tile, FieldCatalog& fields, double d
             for (std::size_t q = 0; q < Nw; ++q)
                 wrhs[q] += dt * Nw_ab[q];
         }
+
+        for (std::size_t q = 0; q < Nu; ++q)
+            urhs[q] += dt * fx_ * inv_rho;
+        for (std::size_t q = 0; q < Nv; ++q)
+            vrhs[q] += dt * fy_ * inv_rho;
+        for (std::size_t q = 0; q < Nw; ++q)
+            wrhs[q] += dt * fz_ * inv_rho;
+
         // Implicit diffusion diagonal and RHS (user-selectable order):
         // Order 1: BE      -> theta=1, RHS += 0
         // Order 2: CN/AM2  -> theta=1/2, RHS += (1/2) dt D^n

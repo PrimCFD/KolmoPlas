@@ -1,4 +1,4 @@
-case: cavity_32
+case: cavity_256
 mesh:
   global: [256, 256, 1]        # thin slab in z
   ng: 2

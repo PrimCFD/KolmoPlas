@@ -1,0 +1,60 @@
+case: channel_128
+
+mesh:
+  global: [128, 128, 64]      # 3D channel
+  ng: 2
+  periodic: [true, false, true]  # periodic in x, z; walls in y
+  proc_grid: [0, 0, 0]
+
+time:
+  dt: 2.5e-3
+  t_end: 25.0
+  write_every: { steps: 100 }
+
+io:
+  path: "@OUT_DIR@"
+  backend: cgns
+  precision: native
+  async: { enabled: false }
+  preflight: { enabled: false }
+
+plugins:
+  - lib: libphysics_fluids.so
+
+program:
+  key: fluids
+  params:
+    dx: "0.04908738521234052"    
+    dy: "0.0078125"              # Ly = 1, NY = 128
+    dz: "0.02454369260617026"
+
+    rho: "1.0"
+    nu:  "3.0e-3"
+
+    scheme: "piso"
+    num_corrections: "2"
+    time_scheme: "abm3"
+    div_tol: "1.0e-7"
+
+    advect: "on"
+
+    init: "channel"
+    Ly: "1.0"
+    Ubulk: "1.0"
+    pert: "0.05"
+
+    fx: "0.01"
+    fy: "0.0"
+    fz: "0.0"
+
+    # BCs: no-slip at y-walls, Neumann p
+    bc.u.south: "dirichlet:0"
+    bc.u.north: "dirichlet:0"
+    bc.v.south: "dirichlet:0"
+    bc.v.north: "dirichlet:0"
+    bc.w.south: "dirichlet:0"
+    bc.w.north: "dirichlet:0"
+    bc.p.*:     "neumann:0"
+
+fields:
+  output: [u, v, w, p]

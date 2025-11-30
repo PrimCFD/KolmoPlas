@@ -11,7 +11,6 @@
 | `format_all.sh` | Run code formatters for C/C++, Fortran, and CMake (skips vendor/build). | `./scripts/format_all.sh` |
 | `mpi_env.sh` | Sourceable helpers to set MPI launcher/env; provides `mpi_exec`. | `source scripts/mpi_env.sh auto` |
 | `prefetch_third_party.sh` | Pre‑download third‑party sources and create reproducible archives in `extern/`. | `./scripts/prefetch_third_party.sh` |
-| `push_ci.sh` | Push the current branch to GitHub and runs the CI on a locally hosted runner (tmux terminal). | `./scripts/push_ci.sh` |
 | `run_unit_tests.sh` | Build (optional) and run **unit** tests via CTest; write JUnit XML. | `./scripts/run_unit_tests.sh` |
 | `run_perf_tests.sh` | Build (optional) and run **perf** tests via CTest; write JUnit XML. | `./scripts/run_perf_tests.sh` |
 | `run_regression_tests.sh` | Configure with MPI and run **MPI** integration tests, laptop/cluster friendly. | `./scripts/run_regression_tests.sh` |

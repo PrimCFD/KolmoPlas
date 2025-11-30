@@ -49,6 +49,8 @@ Params parse_params(const core::master::plugin::KV& kv);
 std::shared_ptr<core::master::plugin::IAction> make_apply_bcs(const core::master::plugin::KV& kv);
 std::shared_ptr<core::master::plugin::IAction> make_init_tg(const core::master::plugin::KV&,
                                                             const core::master::RunContext&);
+std::shared_ptr<core::master::plugin::IAction> make_init_channel(const core::master::plugin::KV&,
+                                                                 const core::master::RunContext&);
 std::shared_ptr<core::master::plugin::IAction> make_sgs(const core::master::plugin::KV&);
 std::shared_ptr<core::master::plugin::IAction> make_predictor(const core::master::plugin::KV&,
                                                               const core::master::RunContext&);
@@ -56,9 +58,9 @@ std::shared_ptr<core::master::plugin::IAction> make_poisson(const core::master::
                                                             const core::master::RunContext&);
 std::shared_ptr<core::master::plugin::IAction> make_corrector(const core::master::plugin::KV&);
 
-struct LESProgram final : core::master::plugin::IProgram
+struct FluidsProgram final : core::master::plugin::IProgram
 {
-    explicit LESProgram(const core::master::plugin::KV& kv, const core::master::RunContext& rc);
+    explicit FluidsProgram(const core::master::plugin::KV& kv, const core::master::RunContext& rc);
     core::master::plugin::StepPlan plan_step(double dt) override;
     bool did_init_ = false;
 

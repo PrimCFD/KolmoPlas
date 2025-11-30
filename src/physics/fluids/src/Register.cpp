@@ -13,9 +13,9 @@ extern "C" bool physics_register_v1(Registry* R)
     if (!R)
         return false;
 
-    // Program: Pressure scheme + Smagorinsky SGS
-    R->add_program("les", [](const KV& kv, const RunContext& rc)
-                   { return std::make_unique<fluids::LESProgram>(kv, rc); });
+    // Program: Pressure scheme + SGS
+    R->add_program("fluids", [](const KV& kv, const RunContext& rc)
+                   { return std::make_unique<fluids::FluidsProgram>(kv, rc); });
 
     // (Optional) Also expose individual actions for experimentation/debug.
     // Users typically won’t instantiate them directly.

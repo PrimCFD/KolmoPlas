@@ -6,7 +6,6 @@
 #include "master/plugin/Action.hpp"
 #include <algorithm>
 #include <cstdlib>
-using namespace numerics::kernels;
 
 using namespace core::master;
 using namespace core::master::plugin;
@@ -122,7 +121,7 @@ extern std::shared_ptr<IAction> make_predictor(const KV&, const RunContext&);
 extern std::shared_ptr<IAction> make_poisson(const KV&, const RunContext&);
 extern std::shared_ptr<IAction> make_corrector(const KV&);
 
-LESProgram::LESProgram(const KV& kv, const RunContext& rc) : p_(parse_params(kv))
+FluidsProgram::FluidsProgram(const KV& kv, const RunContext& rc) : p_(parse_params(kv))
 {
     auto it = kv.find("init");
     std::string init =
@@ -131,6 +130,10 @@ LESProgram::LESProgram(const KV& kv, const RunContext& rc) : p_(parse_params(kv)
     if (init == "taylor_green" || init == "taylor-green" || init == "tg" || init == "tgv")
     {
         init_ = make_init_tg(kv, rc);
+    }
+    else if (init == "channel" || init == "canal" || init == "hartmann" || init == "hart")
+    {
+        init_ = make_init_channel(kv, rc);
     }
     else
     {
@@ -147,7 +150,7 @@ LESProgram::LESProgram(const KV& kv, const RunContext& rc) : p_(parse_params(kv)
     loop_ = make_projection_loop(kv, rc, sgs_, bc_, pred_, psolve_, corr_);
 }
 
-StepPlan LESProgram::plan_step(double)
+StepPlan FluidsProgram::plan_step(double)
 {
     StepPlan plan;
     if (!did_init_ && init_)

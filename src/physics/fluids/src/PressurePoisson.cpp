@@ -1432,7 +1432,6 @@ static void build_hierarchy(PPImpl& impl, MPI_Comm user_comm_in, const PBC& pbc,
     //   an odd size (e.g., 129 -> 65), that multiple condition is violated
     //   (129 % 65 != 0) and PCSetUp/DMCreateInterpolation will error.
     //   We therefore refuse to coarsen along any axis whose size is odd.
-    //
     //   Result: fewer MG levels on odd-sized axes, but robust setup without
     //   "Fine grid points must be multiple of coarse grid points" failures.
     auto can_coarsen_q0_once = [](PetscInt a) -> bool
