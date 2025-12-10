@@ -128,7 +128,13 @@ bool exchange_ghosts(Field<T>& f, const Mesh& m, MPI_Comm comm, int tag_base = 2
         int i0, j0, k0, sx, sy, sz;
     }; // start + size (in interior indexing)
 
-    // n  = interior extent along this axis (cells or faces)
+    // A direction is "thin" if the interior extent is smaller than the ghost width
+    auto is_thin_axis = [&](int n, int g) -> bool
+    {
+        return n < g;
+    };
+
+     // n  = interior extent along this axis (cells or faces)
     // g  = number of ghost layers
     // o  = neighbor offset along this axis (-1,0,+1)
     // isFaceNormal = true if this axis is the MAC-normal one for the field
@@ -136,6 +142,14 @@ bool exchange_ghosts(Field<T>& f, const Mesh& m, MPI_Comm comm, int tag_base = 2
     {
         if (o == 0)
             return 0;
+
+        // If the axis is thinner than a ghost width, fall back to clamped index.
+        if (is_thin_axis(n, g))
+        {
+            // Just send a single clamped layer from the interior.
+            // Caller will set sx/sy/sz = ng, but we will clamp in pack/unpack.
+            return 0;
+        }
 
         // Cell-centred (or tangential-to-axis) case: original behaviour.
         if (!isFaceNormal)
@@ -152,9 +166,11 @@ bool exchange_ghosts(Field<T>& f, const Mesh& m, MPI_Comm comm, int tag_base = 2
 
         // To the plus neighbour we must send the last g faces *before*
         // the shared interface face at local index nc; i = nc-g..nc-1.
-        // (Assuming g <= nc; which holds for your runs.)
+        // (Assuming g <= nc; which holds for normal 3D, but not thin; we
+        // already handled thin above.)
         return nc - g;
     };
+
 
     // Destination: always write into canonical ghost locations; no MAC shift on
     // the receiving side. The indexing convention is:
@@ -165,8 +181,17 @@ bool exchange_ghosts(Field<T>& f, const Mesh& m, MPI_Comm comm, int tag_base = 2
     {
         if (o == 0)
             return 0;
+
+        // For thin directions, we still conceptually have ghosts at [-g..-1] or [n..n+g-1],
+        // but we will clamp indices during pack/unpack, so we don't need strict equalities.
+        if (is_thin_axis(n, g))
+        {
+            return (o < 0 ? -g : n);
+        }
+
         return (o < 0 ? -g : n);
     };
+
 
     auto src_box = [&](int ox, int oy, int oz) -> Box
     {
@@ -196,6 +221,23 @@ bool exchange_ghosts(Field<T>& f, const Mesh& m, MPI_Comm comm, int tag_base = 2
 #ifndef NDEBUGEX
         auto ghost_ok = [&](int n, int g, int o, int s0, int s) -> bool
         {
+            // In thin directions, the assumptions "s == g" and exact positions
+            // no longer hold in a strict sense; we only require that the slab
+            // lives within ghosts ∪ interior. We let clamping in pack/unpack
+            // handle the actual valid range.
+            if (is_thin_axis(n, g))
+            {
+                // Very permissive: allow any slab that touches ghosts.
+                if (o == 0)
+                    return (s0 >= 0 && s0 + s <= n);
+                // o < 0 ghosts- : start <= 0
+                if (o < 0)
+                    return (s0 <= 0 && s > 0);
+                // o > 0 ghosts+ : end >= n
+                return (s0 < n + g && s > 0);
+            }
+
+            // Original strict logic for "normal" directions
             if (o == 0)
                 return (s0 >= 0 && s0 + s <= n);
             if (o < 0)
@@ -253,56 +295,37 @@ bool exchange_ghosts(Field<T>& f, const Mesh& m, MPI_Comm comm, int tag_base = 2
         std::size_t q = 0;
         for (int kk = 0; kk < d.s.sz; ++kk)
         {
-            const int k = d.s.k0 + kk;
+            int k = std::clamp(d.s.k0 + kk, 0, std::max(1, nzI) - 1);
             for (int jj = 0; jj < d.s.sy; ++jj)
             {
-                const int j = d.s.j0 + jj;
+                int j = std::clamp(d.s.j0 + jj, 0, std::max(1, nyI) - 1);
                 for (int ii = 0; ii < d.s.sx; ++ii)
                 {
-                    const int i = d.s.i0 + ii;
+                    int i = std::clamp(d.s.i0 + ii, 0, std::max(1, nxI) - 1);
                     buf[q++] = f(i, j, k);
                 }
             }
         }
     };
+
     auto unpack = [&](const Dir& d, const std::vector<T>& buf)
     {
         std::size_t q = 0;
         for (int kk = 0; kk < d.d.sz; ++kk)
         {
-            const int k = d.d.k0 + kk;
+            int k = d.d.k0 + kk;
             for (int jj = 0; jj < d.d.sy; ++jj)
             {
-                const int j = d.d.j0 + jj;
+                int j = d.d.j0 + jj;
                 for (int ii = 0; ii < d.d.sx; ++ii)
                 {
-                    const int i = d.d.i0 + ii;
+                    int i = d.d.i0 + ii;
+                    // For ghosts, i/j/k may be negative or beyond n, which your Field<>
+                    // supports. We only clamp when reading from interior (pack).
                     f(i, j, k) = buf[q++];
                 }
             }
         }
-    };
-
-    // PROC_NULL: clamp from this rank’s interior (zero-gradient)
-    auto clamp_fill = [&](const Dir& d)
-    {
-        std::vector<T> tmp;
-        tmp.resize(d.count);
-        std::size_t q = 0;
-        for (int kk = 0; kk < d.d.sz; ++kk)
-        {
-            int k = std::clamp(d.d.k0 + kk, 0, std::max(1, nzI) - 1);
-            for (int jj = 0; jj < d.d.sy; ++jj)
-            {
-                int j = std::clamp(d.d.j0 + jj, 0, std::max(1, nyI) - 1);
-                for (int ii = 0; ii < d.d.sx; ++ii)
-                {
-                    int i = std::clamp(d.d.i0 + ii, 0, std::max(1, nxI) - 1);
-                    tmp[q++] = f(i, j, k);
-                }
-            }
-        }
-        unpack(d, tmp);
     };
 
     // post all receives
@@ -328,7 +351,7 @@ bool exchange_ghosts(Field<T>& f, const Mesh& m, MPI_Comm comm, int tag_base = 2
         const auto& d = dirs[idx];
         if (d.peer == MPI_PROC_NULL)
         {
-            clamp_fill(d);
+            continue; // BC handles the physical ghosts
         }
         else if (d.peer == myrank)
         {

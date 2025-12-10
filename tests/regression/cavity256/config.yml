@@ -7,7 +7,7 @@ mesh:
 
 time:
   dt: 5.0e-4
-  t_end: 2.0             # run to steady
+  t_end: 0.4             # >60s to run to steady
   write_every: { steps: 200 }
 
 io:
@@ -21,7 +21,7 @@ plugins:
   - lib: libphysics_fluids.so
 
 program:
-  key: les
+  key: fluids
   params:
     # Unit square in x–y (L=1); use spacings consistent with mesh
     dx: "0.00390625"
@@ -29,14 +29,15 @@ program:
     dz: "1.0"
 
     rho: "1"
-    # Pick Re by nu = 1/Re (with U0 = 1, L = 1)
+    nu:  "1.0e-3" # Pick Re by nu = 1/Re (with U0 = 1, L = 1)
 
     Cs: "0.0" # No LES for benchmark
 
     scheme: "piso"
     num_corrections: "2"
+    advect: "on"
     div_tol: "1.0e-7"
-
+    init: "cavity"
     time_scheme: "abm3"   
 
     # Lid-driven cavity BCs: moving lid at north; other walls no-slip

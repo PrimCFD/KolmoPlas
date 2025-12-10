@@ -148,10 +148,11 @@ void ProjectionLoop::execute(const MeshTileView& tile, FieldCatalog& fields, dou
     auto pressure_correction = [&]()
     {
         psolve_->execute(tile, fields, dt);
+        if (bc_)
+            bc_->execute(tile, fields, 0.0);
         core::master::exchange_named_fields(fields, mesh, mpi_comm_, {"p"});
         corr_->execute(tile, fields, dt);
         core::master::exchange_named_fields(fields, mesh, mpi_comm_, {"u", "v", "w"});
-
         if (bc_)
             bc_->execute(tile, fields, 0.0);
         core::master::exchange_named_fields(fields, mesh, mpi_comm_, {"p", "u", "v", "w"});

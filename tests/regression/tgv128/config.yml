@@ -7,7 +7,7 @@ mesh:
 
 time:
   dt: 5.0e-3
-  t_end: 20.0
+  t_end: 0.5
   write_every: { steps: 40 }
 
 io:

@@ -6,6 +6,7 @@
 #include "master/plugin/Action.hpp"
 #include <algorithm>
 #include <cstdlib>
+#include <iostream>
 
 using namespace core::master;
 using namespace core::master::plugin;
@@ -134,6 +135,10 @@ FluidsProgram::FluidsProgram(const KV& kv, const RunContext& rc) : p_(parse_para
     else if (init == "channel" || init == "canal" || init == "hartmann" || init == "hart")
     {
         init_ = make_init_channel(kv, rc);
+    }
+    else if (init == "cavity" || init == "lid" || init == "lid-driven" || init == "ghia")
+    {
+        init_ = make_init_cavity(kv, rc);
     }
     else
     {

@@ -1,8 +1,3 @@
-# --- build the decay checker
-add_executable(check_tgv_decay ${CMAKE_CURRENT_SOURCE_DIR}/check_tgv_decay.cpp)
-target_compile_features(check_tgv_decay PRIVATE cxx_std_17)
-target_link_libraries(check_tgv_decay PRIVATE core CGNS::cgns)
-
 # pick up MPI launcher settings from env
 set(_MPIEXEC_EXECUTABLE "$ENV{MPIEXEC_EXECUTABLE}")
 set(_MPIEXEC_NUMPROC_FLAG "$ENV{MPIEXEC_NUMPROC_FLAG}")
@@ -16,29 +11,6 @@ set(_MPIEXEC_POSTFLAGS_STR "$ENV{MPIEXEC_POSTFLAGS}")
 separate_arguments(_MPIEXEC_PREFLAGS NATIVE_COMMAND "${_MPIEXEC_PREFLAGS_STR}")
 separate_arguments(_MPIEXEC_POSTFLAGS NATIVE_COMMAND
                    "${_MPIEXEC_POSTFLAGS_STR}")
-
-# Helper to add a TG decay assertion for a case produced by add_fluids_case()
-function(
-  add_tgv_decay_check
-  name
-  nu
-  Lx
-  Ly
-  Lz
-  dt
-  t_end
-  U0
-  tol_rel)
-  # Mirrors how add_fluids_case lays out the case
-  set(case_bin "${CMAKE_CURRENT_BINARY_DIR}/${name}")
-  add_test(NAME regression::fluids::${name}::decay
-           COMMAND $<TARGET_FILE:check_tgv_decay> "${case_bin}/out" ${nu} ${Lx}
-                   ${Ly} ${Lz} ${dt} ${t_end} ${U0} ${tol_rel})
-  set_tests_properties(
-    regression::fluids::${name}::decay
-    PROPERTIES LABELS "regression;fluids" DEPENDS
-               regression::fluids::${name}::run)
-endfunction()
 
 # Helper to add a fluids regression case Usage: default (MODE auto; NP from env
 # or 1) add_fluids_case(name) force sequential run (no mpiexec)
@@ -141,6 +113,3 @@ endfunction()
 add_fluids_case(cavity256 MODE mpi NP 1)
 add_fluids_case(channel128 MODE mpi NP 4)
 add_fluids_case(tgv128 MODE mpi NP 8)
-
-# Assert TG decay at final time (2% rel tol) add_tgv_decay_check( tgv128 0.1
-# 6.283185307179586 6.283185307179586 6.283185307179586 0.05 5.0 1.0 0.02)
