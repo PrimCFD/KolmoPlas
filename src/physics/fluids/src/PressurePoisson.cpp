@@ -27,11 +27,11 @@
 #include <cassert>
 #include <cmath>
 #include <cstring>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include <iostream>
 
 // PETSc
 #include <petscdm.h>
@@ -1419,7 +1419,7 @@ static void build_hierarchy(PPImpl& impl, MPI_Comm user_comm_in, const PBC& pbc,
     //     DMCoarsen/DMCreateInterpolation never try to coarsen through the
     //     thin direction (semi-coarsening in x/y only).
     // This plugs directly into DMDA's DMCoarsen_DA / DMCoarsenHierarchy
-    // logic via dd->coarsen_{x,y,z}. 
+    // logic via dd->coarsen_{x,y,z}.
     // --------------------------------------------------------------------
     PetscInt rx = (impl.nxi_glob > 1) ? 2 : 1;
     PetscInt ry = (impl.nyi_glob > 1) ? 2 : 1;
@@ -1453,7 +1453,7 @@ static void build_hierarchy(PPImpl& impl, MPI_Comm user_comm_in, const PBC& pbc,
     //   "Fine grid points must be multiple of coarse grid points" failures.
     // DMDA coarsening helpers that mirror DMCoarsen_DA's use of dd->coarsen_{x,y,z}
     // and enforce DMDA_Q0's "fine grid points must be a multiple of coarse grid
-    // points" restriction in advance. 
+    // points" restriction in advance.
     auto dmda_next_size = [](PetscInt n, PetscInt cf) -> PetscInt
     {
         // cf <= 1 : no coarsening along that axis
@@ -1503,8 +1503,8 @@ static void build_hierarchy(PPImpl& impl, MPI_Comm user_comm_in, const PBC& pbc,
         {
             // Check prospective sizes *before* asking PETSc to coarsen.
             PetscInt Mc = 0, Nc = 0, Pc = 0, px_c = 0, py_c = 0, pz_c = 0;
-            DMDAGetInfo(cur, nullptr, &Mc, &Nc, &Pc, &px_c, &py_c, &pz_c,
-                        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+            DMDAGetInfo(cur, nullptr, &Mc, &Nc, &Pc, &px_c, &py_c, &pz_c, nullptr, nullptr, nullptr,
+                        nullptr, nullptr, nullptr);
 
             // Recompute desired refinement/coarsen factors on THIS level.
             // Axes with a single cell (e.g. slab in z) get factor 1 so they
@@ -1528,24 +1528,22 @@ static void build_hierarchy(PPImpl& impl, MPI_Comm user_comm_in, const PBC& pbc,
 
             // PETSc DMCreateInterpolation_DA() requirement for Q0:
             // if the fine grid has > 1 cell along an axis, the coarse grid must have >= 2.
-            auto ok_pair = [](PetscInt fine, PetscInt coarse) -> bool {
+            auto ok_pair = [](PetscInt fine, PetscInt coarse) -> bool
+            {
                 // illegal: trying to interpolate between fine>1 and coarse<2
                 if (fine > 1 && coarse < 2)
                     return false;
                 return true;
             };
 
-            const bool x_ok = !x_will ||
-                            (ok_pair(Mc, Mc2) &&
-                            Mc2 >= px_c && dmda_q0_compatible(Mc, cx));
+            const bool x_ok =
+                !x_will || (ok_pair(Mc, Mc2) && Mc2 >= px_c && dmda_q0_compatible(Mc, cx));
 
-            const bool y_ok = !y_will ||
-                            (ok_pair(Nc, Nc2) &&
-                            Nc2 >= py_c && dmda_q0_compatible(Nc, cy));
+            const bool y_ok =
+                !y_will || (ok_pair(Nc, Nc2) && Nc2 >= py_c && dmda_q0_compatible(Nc, cy));
 
-            const bool z_ok = !z_will ||
-                            (ok_pair(Pc, Pc2) &&
-                            Pc2 >= pz_c && dmda_q0_compatible(Pc, cz));
+            const bool z_ok =
+                !z_will || (ok_pair(Pc, Pc2) && Pc2 >= pz_c && dmda_q0_compatible(Pc, cz));
 
             // Stop if:
             //  - no axis will actually be coarsened any further, or
@@ -1563,8 +1561,6 @@ static void build_hierarchy(PPImpl& impl, MPI_Comm user_comm_in, const PBC& pbc,
 
             chain_f2c.push_back(next);
             cur = next;
-
-
         }
         // PCMG expects 0=coarsest ... L-1=finest
         impl.da_lvl.assign(chain_f2c.rbegin(), chain_f2c.rend());

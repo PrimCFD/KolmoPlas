@@ -129,12 +129,9 @@ bool exchange_ghosts(Field<T>& f, const Mesh& m, MPI_Comm comm, int tag_base = 2
     }; // start + size (in interior indexing)
 
     // A direction is "thin" if the interior extent is smaller than the ghost width
-    auto is_thin_axis = [&](int n, int g) -> bool
-    {
-        return n < g;
-    };
+    auto is_thin_axis = [&](int n, int g) -> bool { return n < g; };
 
-     // n  = interior extent along this axis (cells or faces)
+    // n  = interior extent along this axis (cells or faces)
     // g  = number of ghost layers
     // o  = neighbor offset along this axis (-1,0,+1)
     // isFaceNormal = true if this axis is the MAC-normal one for the field
@@ -171,7 +168,6 @@ bool exchange_ghosts(Field<T>& f, const Mesh& m, MPI_Comm comm, int tag_base = 2
         return nc - g;
     };
 
-
     // Destination: always write into canonical ghost locations; no MAC shift on
     // the receiving side. The indexing convention is:
     //   interior: [0 .. n-1]
@@ -191,7 +187,6 @@ bool exchange_ghosts(Field<T>& f, const Mesh& m, MPI_Comm comm, int tag_base = 2
 
         return (o < 0 ? -g : n);
     };
-
 
     auto src_box = [&](int ox, int oy, int oz) -> Box
     {

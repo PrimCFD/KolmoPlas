@@ -125,14 +125,9 @@ void ApplyBCs::execute(const MeshTileView& tile, FieldCatalog& fields, double)
         int sgn;
     };
 
-    static constexpr Face faces[6] = {
-        {"west",   Axis::I, -1},
-        {"east",   Axis::I, +1},
-        {"south",  Axis::J, -1},
-        {"north",  Axis::J, +1},
-        {"bottom", Axis::K, -1},
-        {"top",    Axis::K, +1}
-    };
+    static constexpr Face faces[6] = {{"west", Axis::I, -1},   {"east", Axis::I, +1},
+                                      {"south", Axis::J, -1},  {"north", Axis::J, +1},
+                                      {"bottom", Axis::K, -1}, {"top", Axis::K, +1}};
 
     auto have = [&](const char* n) { return fields.contains(n); };
     auto is_mirror = [](const BcSpec* s) { return s && s->type == BcSpec::Type::mirror; };
@@ -145,9 +140,7 @@ void ApplyBCs::execute(const MeshTileView& tile, FieldCatalog& fields, double)
         const BcSpec* sp = find_bc(bcs_, std::string("p.") + f.key);
 
         // Override from mesh.periodic when set (authoritative)
-        if ((f.ax == Axis::I && perX) ||
-            (f.ax == Axis::J && perY) ||
-            (f.ax == Axis::K && perZ))
+        if ((f.ax == Axis::I && perX) || (f.ax == Axis::J && perY) || (f.ax == Axis::K && perZ))
         {
             su = sv = sw = sp = &kPeriodic;
         }
@@ -159,8 +152,8 @@ void ApplyBCs::execute(const MeshTileView& tile, FieldCatalog& fields, double)
         for (int r = 0; r < reps; ++r)
         {
             // Vector mirror if requested on all 3 velocity components and present
-            if (have("u") && have("v") && have("w") &&
-                is_mirror(su) && is_mirror(sv) && is_mirror(sw))
+            if (have("u") && have("v") && have("w") && is_mirror(su) && is_mirror(sv) &&
+                is_mirror(sw))
             {
                 apply_mirror_vector(U, V, W, f.ax, f.sgn, mask_for(f.ax));
             }

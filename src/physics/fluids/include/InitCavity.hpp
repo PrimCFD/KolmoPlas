@@ -13,8 +13,7 @@ struct InitCavity final : core::master::plugin::IAction
 
     const core::master::plugin::ActionInfo& info() const noexcept override { return info_; }
 
-    void execute(const core::master::MeshTileView& tile,
-                 core::master::FieldCatalog& fields,
+    void execute(const core::master::MeshTileView& tile, core::master::FieldCatalog& fields,
                  double /*dt*/) override;
 
   private:
@@ -23,8 +22,7 @@ struct InitCavity final : core::master::plugin::IAction
     void* mpi_comm_{nullptr};
 };
 
-std::shared_ptr<core::master::plugin::IAction>
-make_init_cavity(const core::master::plugin::KV& kv,
-                 const core::master::RunContext& rc);
+std::shared_ptr<core::master::plugin::IAction> make_init_cavity(const core::master::plugin::KV& kv,
+                                                                const core::master::RunContext& rc);
 
 } // namespace fluids

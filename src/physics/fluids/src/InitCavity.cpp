@@ -18,22 +18,26 @@ namespace fluids
 InitCavity::InitCavity(double Lx, double Ly, double Lz, double U0, void* mpi_comm)
     : info_{}, Lx_(Lx), Ly_(Ly), Lz_(Lz), U0_(U0), mpi_comm_(mpi_comm)
 {
-    info_.name   = "fluids.init.cavity";
+    info_.name = "fluids.init.cavity";
     info_.phases = plugin::Phase::PreExchange; // same as InitTG
 }
 
-std::shared_ptr<plugin::IAction>
-make_init_cavity(const plugin::KV& kv, const RunContext& rc)
+std::shared_ptr<plugin::IAction> make_init_cavity(const plugin::KV& kv, const RunContext& rc)
 {
-    auto get = [&](const std::string& key, const std::string& def) -> std::string {
+    auto get = [&](const std::string& key, const std::string& def) -> std::string
+    {
         auto it = kv.find(key);
         return (it == kv.end()) ? def : it->second;
     };
 
-    auto to_d = [](const std::string& s, double fallback) {
-        try {
+    auto to_d = [](const std::string& s, double fallback)
+    {
+        try
+        {
             return std::stod(s);
-        } catch (...) {
+        }
+        catch (...)
+        {
             return fallback;
         }
     };
@@ -48,10 +52,12 @@ make_init_cavity(const plugin::KV& kv, const RunContext& rc)
 
 void InitCavity::execute(const MeshTileView& tile, FieldCatalog& fields, double)
 {
-    auto require = [&](const char* name) {
-        if (!fields.contains(name)) {
-            throw std::runtime_error(
-                std::string{"[fluids.init.cavity] Missing field \""} + name + "\"");
+    auto require = [&](const char* name)
+    {
+        if (!fields.contains(name))
+        {
+            throw std::runtime_error(std::string{"[fluids.init.cavity] Missing field \""} + name +
+                                     "\"");
         }
     };
 
@@ -69,7 +75,7 @@ void InitCavity::execute(const MeshTileView& tile, FieldCatalog& fields, double)
         throw std::runtime_error("[fluids.init.cavity] tile.mesh is null.");
 
     const auto& mesh = *tile.mesh;
-    const int   ng   = mesh.ng;
+    const int ng = mesh.ng;
 
     // Cell-centered (pressure) local sizes
     const int nx_c = mesh.local[0];
@@ -110,9 +116,10 @@ void InitCavity::execute(const MeshTileView& tile, FieldCatalog& fields, double)
     const int nyc_tot = ex_p[1];
     const int nzc_tot = ex_p[2];
 
-    auto fail_extents = [](const char* name) {
-        throw std::runtime_error(
-            std::string{"[fluids.init.cavity] Unexpected extents for field "} + name);
+    auto fail_extents = [](const char* name)
+    {
+        throw std::runtime_error(std::string{"[fluids.init.cavity] Unexpected extents for field "} +
+                                 name);
     };
 
     if (nxu_tot != nxu + 2 * ng || nyu_tot != nyu + 2 * ng || nzu_tot != nzu + 2 * ng)
@@ -131,18 +138,14 @@ void InitCavity::execute(const MeshTileView& tile, FieldCatalog& fields, double)
     auto* p = static_cast<double*>(vp.host_ptr);
 
     // x-fastest indexing helpers (same layout assumptions as elsewhere)
-    const auto idx_u = [=](int i, int j, int k) noexcept {
-        return (k * nyu_tot + j) * nxu_tot + i;
-    };
-    const auto idx_v = [=](int i, int j, int k) noexcept {
-        return (k * nyv_tot + j) * nxv_tot + i;
-    };
-    const auto idx_w = [=](int i, int j, int k) noexcept {
-        return (k * nyw_tot + j) * nxw_tot + i;
-    };
-    const auto idx_p = [=](int i, int j, int k) noexcept {
-        return (k * nyc_tot + j) * nxc_tot + i;
-    };
+    const auto idx_u = [=](int i, int j, int k) noexcept
+    { return (k * nyu_tot + j) * nxu_tot + i; };
+    const auto idx_v = [=](int i, int j, int k) noexcept
+    { return (k * nyv_tot + j) * nxv_tot + i; };
+    const auto idx_w = [=](int i, int j, int k) noexcept
+    { return (k * nyw_tot + j) * nxw_tot + i; };
+    const auto idx_p = [=](int i, int j, int k) noexcept
+    { return (k * nyc_tot + j) * nxc_tot + i; };
 
     // Zero everything (including halos). The lid velocity will
     // be imposed by the BC handler on the first call to ApplyBCs.
@@ -168,8 +171,7 @@ void InitCavity::execute(const MeshTileView& tile, FieldCatalog& fields, double)
 
     if (tile.mesh)
     {
-        core::master::exchange_named_fields(fields, *tile.mesh, mpi_comm_,
-                                            {"u", "v", "w", "p"});
+        core::master::exchange_named_fields(fields, *tile.mesh, mpi_comm_, {"u", "v", "w", "p"});
     }
 }
 
