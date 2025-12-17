@@ -1,20 +1,41 @@
 #!/usr/bin/env bash
-# Thorough CMake/Ninja build cleaner for this repo
-# Works on build-*/ dirs except build-docs/ (docs-only)
-# Usage:
-#   ./clean.sh [-a|--all] [-k|--keep-deps] [-n|--dry-run] [-y|--yes] [-v|--verbose] [BUILD_DIR ...]
-#
-# If no BUILD_DIR is provided and --all is not set, falls back to $BUILD_DIR if present.
-# Examples:
-#   ./clean.sh build-debug
-#   ./clean.sh --keep-deps build-mpi build-perf
-#   ./clean.sh --all -n     # preview what would be removed
 
 set -Eeuo pipefail
 
 usage() {
-  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+  cat <<'EOF'
+Usage: scripts/clean_build.sh [options] [BUILD_DIR ...]
+
+Thorough CMake/Ninja build cleaner for this repo. Operates on build-like
+directories (build/, build-*, cmake-build-*), skipping build-docs/ by default.
+
+Options:
+  -a, --all            Clean all detected build directories under the repo root.
+  -k, --keep-deps      Preserve build/_deps (downloaded third-party sources).
+  -n, --dry-run        Show what would be removed but do not delete anything.
+  -y, --yes            Do not prompt for confirmation before deleting.
+  -v, --verbose        Print extra logging about what is being cleaned.
+  -h, --help           Show this help message and exit.
+
+Behaviour:
+  - If BUILD_DIR arguments are provided, only those directories are considered.
+  - If no BUILD_DIR is given and --all is not set, falls back to $BUILD_DIR if set.
+  - A directory is only cleaned if it looks like a CMake/Ninja build tree.
+
+Examples:
+  scripts/clean_build.sh build-debug
+  scripts/clean_build.sh --keep-deps build-mpi build-perf -y
+  scripts/clean_build.sh --all -n    # preview everything that would be removed
+EOF
 }
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $1"; usage; exit 2 ;;
+  esac
+  shift
+done
 
 # ---- options ----
 DRY_RUN=0

@@ -1,23 +1,43 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# -------------------------------------------------
-# build.sh — centralized, env-driven CMake build
-# -------------------------------------------------
-# Env (all optional):
-#   BUILD_DIR                build dir (relative to repo root unless absolute) [default: build]
-#   CMAKE_BUILD_TYPE         Debug/Release/RelWithDebInfo/MinSizeRel [default: Release]
-#   BUILD_TESTS              ON/OFF (configure tests) [default: ON]
-#   MPIEXEC_PREFLAGS         forwarded to CMake (e.g., --oversubscribe for OpenMPI)
-#   CMAKE_GENERATOR          override generator (e.g., "Ninja")
-#   CMAKE_TOOLCHAIN_FILE     forwarded if set
-#   EXTRA_CMAKE_ARGS         extra cmake args (space-separated)
-#   OFFLINE                  if "1", force disconnected FetchContent
-#
-# Examples:
-#   CMAKE_BUILD_TYPE=Debug ./build.sh
-#   BUILD_DIR=build-regression ./build.sh
-#   EXTRA_CMAKE_ARGS="-DUSE_SYSTEM_HDF5=OFF" ./build.sh
+usage() {
+  cat <<'EOF'
+Usage: scripts/build.sh [options]
+
+Configure and build the project via CMake (centralised, env-driven).
+
+Options:
+  -h, --help              Show this help message and exit.
+
+Environment (optional):
+  BUILD_DIR               Build directory (default: build)
+  CMAKE_BUILD_TYPE        Debug|Release|RelWithDebInfo|MinSizeRel (default: Release)
+  BUILD_TESTS             ON/OFF to configure tests (default: ON)
+  ENABLE_CUDA             ON/OFF/AUTO to toggle CUDA support (default: AUTO logic)
+  USE_CUDA_UM             ON/OFF to enable CUDA unified memory (default: OFF)
+  MPIEXEC_PREFLAGS        Extra flags forwarded to CMake's MPIEXEC_PREFLAGS
+  CMAKE_GENERATOR         CMake generator (e.g. "Ninja")
+  CMAKE_TOOLCHAIN_FILE    Toolchain file for cross-compiling
+  EXTRA_CMAKE_ARGS        Extra flags appended to the CMake configure command
+  OFFLINE                 If "1", force disconnected FetchContent
+
+Examples:
+  scripts/build.sh
+  CMAKE_BUILD_TYPE=Debug scripts/build.sh
+  BUILD_DIR=build-perf BUILD_TESTS=OFF scripts/build.sh
+EOF
+}
+
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $1"; usage; exit 2 ;;
+  esac
+  shift
+done
+
 
 # --- Locate repo root by walking up to nearest CMakeLists.txt
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

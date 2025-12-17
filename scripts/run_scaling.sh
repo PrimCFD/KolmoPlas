@@ -2,12 +2,51 @@
 # =============================================================================
 # run_scaling.sh — sweep grids × ranks × threads and dump CSVs for scaling plots
 # =============================================================================
-# Location: scripts/run_scaling.sh
-# Output:   build-scaling/build_info.csv, build-scaling/results_scaling.csv
-#
-# Usage examples:
-#   scripts/run_scaling.sh
-#   # Choose a near-cubic DMDA factorization (px,py,pz) for (N, R)
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/run_scaling.sh [options]
+
+Sweep grids × MPI ranks × OpenMP threads to generate strong-scaling CSVs and
+logs suitable for post-processing with postprocess_scaling.py. Results are
+written under build-scaling/.
+
+Outputs:
+  build-scaling/build_info.csv
+  build-scaling/results_scaling.csv
+  build-scaling/logs/*
+
+Options:
+  -h, --help           Show this help message and exit.
+
+Environment:
+  SCALING_GRIDS        Space-separated list of grid sizes N (cubic N^3).
+                       Default: script-provided sensible values.
+  SCALING_RANKS        Space-separated list of MPI ranks to test.
+  SCALING_THREADS      Space-separated list of OMP_NUM_THREADS to test.
+  BUILD_DIR            Build directory (default: build-scaling).
+  MPI_MODE             Mode for scripts/mpi_env.sh (auto|emulate|cluster).
+  MPI_STRICT_PE        0|1 to enforce ranks×PE ≤ cores (default: 1).
+  PETSC_OPTIONS_EXTRA  Extra PETSc options appended to the solver run.
+  EXTRA_CMAKE_ARGS     Extra CMake args for the scaling build.
+
+Examples:
+  scripts/run_scaling.sh
+  SCALING_GRIDS="128 256" SCALING_RANKS="1 4 8" \
+    SCALING_THREADS="1 2" scripts/run_scaling.sh
+  PETSC_OPTIONS_EXTRA="-pc_type mg -ksp_type pipecg" scripts/run_scaling.sh
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $1"; usage; exit 2 ;;
+  esac
+  shift
+done
+
+
 choose_dmda() {
   local N="$1"; local R="$2"
   local best_px=1 best_py=1 best_pz="$R" best_cost=1e18

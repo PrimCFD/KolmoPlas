@@ -7,8 +7,8 @@ mesh:
 
 time:
   dt: 5.0e-4
-  t_end: 0.4             # >60s to run to steady
-  write_every: { steps: 200 }
+  t_end: 30.0             # >60s to run to steady
+  write_every: { steps: 1000 }
 
 io:
   path: "@OUT_DIR@"

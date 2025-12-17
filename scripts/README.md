@@ -14,6 +14,10 @@
 | `run_unit_tests.sh` | Build (optional) and run **unit** tests via CTest; write JUnit XML. | `./scripts/run_unit_tests.sh` |
 | `run_perf_tests.sh` | Build (optional) and run **perf** tests via CTest; write JUnit XML. | `./scripts/run_perf_tests.sh` |
 | `run_regression_tests.sh` | Configure with MPI and run **MPI** integration tests, laptop/cluster friendly. | `./scripts/run_regression_tests.sh` |
+| `run_scaling.sh` | Sweep grids × MPI ranks × OpenMP threads and write strong-scaling CSVs/logs. | `./scripts/run_scaling.sh` |
+| `tgv_spectrum.py` | Compute isotropic TGV energy spectrum E(k) from CGNS/HDF5 outputs. | `python scripts/tgv_spectrum.py --file result.cgns` |
+| `ldc_ghia.py` | Lid-driven cavity centerline regression vs Ghia et al. (profiles, errors, plots). | `python scripts/ldc_ghia.py --file cavity.cgns` |
+| `postprocess_scaling.py` | Clean and plot strong-scaling CSVs (speedup/efficiency reports). | `python scripts/postprocess_scaling.py` |
 
 > Unless stated otherwise, run scripts from the repo root. Many respect `BUILD_DIR` if you want custom build folders.
 
@@ -245,6 +249,154 @@ mpi_exec 4 ./build/bin/your_mpi_program
   ./scripts/run_regression_tests.sh
   BUILD_DIR=build-regression ./scripts/run_regression_tests.sh
   ```
+
+## Scaling studies
+
+### `run_scaling.sh`
+
+**What it does**  
+- Sweeps a set of cubic grid sizes `N` (i.e. `N^3`) across combinations of MPI ranks and OpenMP threads.  
+- Runs the Poisson benchmark (`bench_poisson_fluids`) under MPI, collecting:  
+  - mean/StdDev of per-step timings (µs) when available,  
+  - wall-clock time,  
+  - PETSc KSP iteration counts and convergence reasons.  
+- Writes:  
+  - `build-scaling/build_info.csv` with build/git/launcher info,  
+  - `build-scaling/results_scaling.csv` with one row per (grid, ranks, threads, repetition),  
+  - logs for each run under `build-scaling/logs/`.
+
+**Key env**  
+- `SCALING_GRIDS` — space-separated grid sizes `N` (default: `64 128 256`).  
+- `SCALING_RANKS` — MPI ranks to test (default: `1 2 4`).  
+- `SCALING_THREADS` — `OMP_NUM_THREADS` values to test (default: `1 2`).  
+- `SCALING_REPS` — repetitions per configuration (default: `3`).  
+- `SCALING_BUILD_FIRST` — `1|0`, whether to rebuild perf tests first (default: `1`).  
+- `SCALING_SET_DA_PROCS` — `1|0`, auto-choose near-cubic PETSc DMDA decomposition (default: `1`).  
+- `BUILD_DIR` — scaling build directory (default: `build-scaling`).  
+- `PETSC_OPTIONS_EXTRA` — extra PETSc options appended to the solver run.
+
+**Example**  
+```bash
+# Default sweep (64^3, 128^3, 256^3; ranks 1/2/4; threads 1/2)
+./scripts/run_scaling.sh
+
+# Custom grids/ranks/threads with extra PETSc options
+SCALING_GRIDS="128 256" \
+SCALING_RANKS="1 4 8" \
+SCALING_THREADS="1 2" \
+PETSC_OPTIONS_EXTRA="-pc_type mg -ksp_type pipecg" \
+  ./scripts/run_scaling.sh
+```
+
+### `postprocess_scaling.py`
+
+**What it does**
+
+* Reads `build-scaling/results_scaling.csv` and:
+
+  * normalises timings (prefers `mean_us`, falls back to `wall_s`),
+  * annotates rows with a boolean `nice_factorization` flag when the DMDA layout is “nice” for the given `N` and `ranks`,
+  * aggregates to a cleaned table with one row per `(grid_n, ranks)` including speedup and parallel efficiency vs the minimum-rank run.
+* Writes:
+
+  * `build-scaling/scaling_reports/results_scaling_cleaned.csv`,
+  * speedup plots `speedup_N{N}.png` and efficiency plots `efficiency_N{N}.png` for each grid size.
+
+**CLI**
+
+```bash
+python scripts/postprocess_scaling.py \
+  --csv build-scaling/results_scaling.csv \
+  --out-dir build-scaling/scaling_reports
+```
+
+**Arguments**
+
+* `--csv` — input CSV path (default: `build-scaling/results_scaling.csv`).
+* `--out-dir` — output directory for cleaned CSV and plots (default: `build-scaling/scaling_reports`).
+
+## Post-processing utilities
+
+### `tgv_spectrum.py`
+
+**What it does**  
+- Reads a Taylor–Green vortex (or similar) result file produced by the CGNS/HDF5 writers (`u_cell`, `v_cell`, `w_cell` cell-centred velocities).  
+- Supports both backends:
+  - CGNS: picks the last `FlowSolutionAtStepXXXX_Cell` by default.  
+  - HDF5: picks the last `Step_xxxxxx` group (or an explicit index).  
+- Computes an isotropic 1D energy spectrum `E(k)` by:
+  1. subtracting mean velocity,  
+  2. performing 3D FFTs,  
+  3. forming kinetic energy density in k-space,  
+  4. binning into spherical shells (log-spaced by default).  
+- Produces spectrum plots and optionally a compensated spectrum, saving figures and data next to the result file.
+
+**Typical usage**  
+```bash
+# From a specific CGNS file
+python scripts/tgv_spectrum.py --file build-regression/tests/regression/tgv128/out/flow.cgns
+
+# Let the script auto-discover the newest file under a directory
+python scripts/tgv_spectrum.py --data-dir build-regression/tests/regression/tgv128/out
+```
+
+**Common options**
+
+* `--file` — explicit `*.cgns` / `*.h5` / `*.hdf5` result file.
+* `--data-dir` — directory to search for the latest result when `--file` is omitted.
+* `--solution-name` — choose a specific `FlowSolution_t` in CGNS.
+* `--step-index` — choose a specific `Step_xxxxxx` in HDF5 (default: last step).
+* `--no-plot` — skip showing plots (still writes files).
+
+---
+
+### `ldc_ghia.py`
+
+**What it does**
+
+* Reads a 2D lid-driven cavity result (CGNS or HDF5):
+
+  * CGNS: `u_cell`, `v_cell` from the last `*_Cell` `FlowSolution_t`,
+  * HDF5: `u_cell`, `v_cell` from the last `Step_xxxxxx` group.
+* Extracts:
+
+  * `u(y)` along the vertical centerline `x = 0.5`,
+  * `v(x)` along the horizontal centerline `y = 0.5`.
+* Loads Ghia et al. benchmark data from ASCII tables (`ghiau.txt`, `ghiav.txt`).
+* Interpolates your profiles to the Ghia sample points, prints L2 / L∞ errors, and overlays plots.
+* Saves profiles, reference data, and interpolated values to text files alongside the input result, plus PNG/SVG/PDF figures.
+
+**Defaults**
+
+* Results directory:
+  `build-regression/tests/regression/cavity256/out`.
+* Ghia data directory: `scripts/ghia/` (`ghiau.txt`, `ghiav.txt`).
+
+**Typical usage**
+
+```bash
+# Use the latest cavity result under the default regression output dir
+python scripts/ldc_ghia.py
+
+# Explicit file and Reynolds number
+python scripts/ldc_ghia.py --file build-regression/tests/regression/cavity256/out/cavity.cgns --Re 1000
+
+# Explicit Ghia data and output prefix
+python scripts/ldc_ghia.py \
+  --file cavity.h5 \
+  --ghia-u scripts/ghia/ghiau.txt \
+  --ghia-v scripts/ghia/ghiav.txt \
+  --out-prefix build-regression/tests/regression/cavity256/out/cavity_ghia_Re1000
+```
+
+**Key options**
+
+* `--file` / `--data-dir` — choose the result file or search directory.
+* `--Re` — Reynolds number to pick the appropriate column from Ghia tables (default: `1000`).
+* `--ghia-u`, `--ghia-v` — override paths to the Ghia reference tables.
+* `--out-prefix` — prefix for saved data/plots (default: derived from the input filename).
+* `--formats` — comma-separated figure formats (e.g. `png,svg,pdf`).
+* `--no-plot` — don’t open GUI windows; just write files.
 
 ---
 

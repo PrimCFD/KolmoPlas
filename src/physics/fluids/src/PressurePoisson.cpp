@@ -1530,8 +1530,13 @@ static void build_hierarchy(PPImpl& impl, MPI_Comm user_comm_in, const PBC& pbc,
             // if the fine grid has > 1 cell along an axis, the coarse grid must have >= 2.
             auto ok_pair = [](PetscInt fine, PetscInt coarse) -> bool
             {
-                // illegal: trying to interpolate between fine>1 and coarse<2
+                // For Q0 interpolation we require:
+                // - if fine has >1 point, coarse must have at least 2 points
                 if (fine > 1 && coarse < 2)
+                    return false;
+                // Additionally, avoid fine>1 -> coarse==1 transitions explicitly
+                // (very thin anisotropic grids can sneak in otherwise)
+                if (fine > 1 && coarse == 1)
                     return false;
                 return true;
             };
@@ -1562,6 +1567,47 @@ static void build_hierarchy(PPImpl& impl, MPI_Comm user_comm_in, const PBC& pbc,
             chain_f2c.push_back(next);
             cur = next;
         }
+
+        // Post-filter hierarchy for DMDA_Q0 interpolation compatibility:
+        // For each adjacent (fine, coarse) pair that will be passed to
+        // DMCreateInterpolation(DMDA_Q0), enforce:
+        //   - if fine > 1 then coarse >= 2, and
+        //   - fine is an integer multiple of coarse.
+        // If a coarse level violates this, drop it (and any coarser levels)
+        // from the chain. This prevents "Coarse grid requires at least 2
+        // points in <dir>" errors in DMCreateInterpolation_DA().
+        int nlevels = (int) chain_f2c.size();
+        int keep = nlevels;
+        auto bad_axis_pair = [](PetscInt nf, PetscInt nc) -> bool
+        {
+            if (nf <= 1)
+                return false; // fine is already collapsed; any coarse is OK
+            if (nc < 2)
+                return true; // illegal for Q0: fine>1 with coarse<2
+            if (nf % nc != 0)
+                return true; // Q0 requires fine to be a multiple of coarse
+            return false;
+        };
+
+        for (int l = nlevels - 1; l > 0; --l)
+        {
+            PetscInt Mf = 0, Nf = 0, Pf = 0;
+            PetscInt Mc = 0, Nc = 0, Pc = 0;
+            DMDAGetInfo(chain_f2c[l - 1], nullptr, &Mf, &Nf, &Pf, nullptr, nullptr, nullptr,
+                        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+            DMDAGetInfo(chain_f2c[l], nullptr, &Mc, &Nc, &Pc, nullptr, nullptr, nullptr, nullptr,
+                        nullptr, nullptr, nullptr, nullptr, nullptr);
+            if (bad_axis_pair(Mf, Mc) || bad_axis_pair(Nf, Nc) || bad_axis_pair(Pf, Pc))
+            {
+                keep = l;
+                break;
+            }
+        }
+        for (int i = keep; i < nlevels; ++i)
+            if (i > 0)
+                DMDestroy(&chain_f2c[i]);
+        chain_f2c.resize(keep);
+
         // PCMG expects 0=coarsest ... L-1=finest
         impl.da_lvl.assign(chain_f2c.rbegin(), chain_f2c.rend());
     }

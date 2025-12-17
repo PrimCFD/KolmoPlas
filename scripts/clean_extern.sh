@@ -1,19 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Remove everything in extern/ except extern/README.md
-# Options: -y/--yes (no prompt), -n/--dry-run (show what would be deleted)
-
 YES=0
 DRY=0
 
 usage() {
   cat <<'EOF'
-Usage: scripts/clean-extern.sh [-y|--yes] [-n|--dry-run]
+Usage: scripts/clean_extern.sh [options]
 
-Deletes all files and directories under extern/, except extern/README.md.
+Delete all files and directories under extern/, preserving extern/README.md.
+
+Options:
+  -y, --yes            Do not prompt before deleting.
+  -n, --dry-run        Show what would be deleted but do not remove anything.
+  -h, --help           Show this help message and exit.
+
+Notes:
+  - The script refuses to run if extern/ does not exist under the repo root.
+  - Deletion is depth-first so directories are removed after their contents.
+
+Examples:
+  scripts/clean_extern.sh -n
+  scripts/clean_extern.sh -y
 EOF
 }
+
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

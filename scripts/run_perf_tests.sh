@@ -2,6 +2,48 @@
 set -euo pipefail
 # Build (optional) and run *perf* tests using build.sh
 
+usage() {
+  cat <<'EOF'
+Usage: scripts/run_perf_tests.sh [options]
+
+Build (optional) and run performance tests via CTest (label: perf), writing
+JUnit XML under $BUILD_DIR/test-reports/perf/. Sets a laptop/cluster-friendly
+MPI environment via scripts/mpi_env.sh when available.
+
+Options:
+  -h, --help           Show this help message and exit.
+
+Environment:
+  BUILD_DIR            Build directory (default: build-perf).
+  SKIP_BUILD           0|1 to skip the build step (default: 0).
+  CTEST_PARALLEL_LEVEL Number of tests to run in parallel (default: CPU count).
+  CTEST_TIMEOUT        Per-test timeout in seconds (default: 900).
+  REPORT_DIR           Output directory for JUnit XML
+                       (default: $BUILD_DIR/test-reports/perf).
+  MPI_MODE             auto|emulate|cluster mode for mpi_env.sh (default: auto).
+  MPI_STRICT_PE        0|1 to enforce ranks×PE ≤ cores (default: 1).
+  OMP_NUM_THREADS      Threads per MPI rank (default: 1 here).
+  ENABLE_CUDA          ON/OFF/AUTO for CUDA perf runs (default: AUTO logic).
+  USE_CUDA_UM          ON/OFF for CUDA unified memory (default: OFF or ON if AUTO chooses CUDA).
+  PETSC_CONFIGURE_OPTS Extra PETSc configure flags for vendored PETSc.
+  EXTRA_CMAKE_ARGS     Extra CMake args (tests toggles are appended automatically).
+  EXTRA_CMAKE_ARGS_USER User-provided CMake args appended after toggles.
+
+Examples:
+  scripts/run_perf_tests.sh
+  SKIP_BUILD=1 scripts/run_perf_tests.sh
+  BUILD_DIR=build-perf CTEST_PARALLEL_LEVEL=4 scripts/run_perf_tests.sh
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $1"; usage; exit 2 ;;
+  esac
+  shift
+done
+
 
 # Set MPI env
 

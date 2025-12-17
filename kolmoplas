@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parent
 
 def run_script(script_rel_path, extra_args, use_python=False, env=None):
     """
-    Run a script located under <repo_root>/scripts.
+    Run a script located under <repo_root>/scripts>.
 
     script_rel_path: e.g. "build.sh"
     extra_args: list of extra CLI args to forward
@@ -46,225 +46,185 @@ def run_regression_case(case_name: str, extra_args):
 
     This assumes tests are named like:
       regression::fluids::<case_name>::run
-    as in tests/fluids/CMakeLists.txt. :contentReference[oaicite:8]{index=8}
     """
-    # CTest name regex to match only this case's 'run' test
     regex = rf"^regression::fluids::{case_name}::run$"
     env = {"CTEST_NAME_REGEX": regex}
-    # Forward any additional args to run_regression_tests.sh
     run_script("run_regression_tests.sh", extra_args, env=env)
+
+
+def register_script_leaf(subparsers, name, script, help_text, use_python=False):
+    """
+    Register a leaf subcommand that simply wraps a script in scripts/.
+
+    - 'kolmoplas ... name -h/--help' is forwarded to the script.
+    - Group-level 'kolmoplas test -h' etc. still shows argparse routing help.
+    """
+    p = subparsers.add_parser(
+        name,
+        add_help=False,      # so -h/--help is not intercepted here
+        help=help_text,
+        description=help_text,
+    )
+
+    def _runner(ns, extra, script=script, use_python=use_python):
+        run_script(script, extra, use_python=use_python)
+
+    p.set_defaults(func=_runner)
+    return p
 
 
 def main():
     parser = argparse.ArgumentParser(
         prog="kolmoplas",
-        description="KolmoPlas devOps CLI tool"
+        description="KolmoPlas devOps / workflow CLI (thin wrapper around scripts/).",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # --- build ---
-    p_build = subparsers.add_parser(
-        "build",
-        help="Build the project (wrapper around scripts/build.sh)."
-    )
-    p_build.add_argument(
-        "args",
-        nargs=argparse.REMAINDER,
-        help="Extra args passed through to build.sh"
-    )
-    p_build.set_defaults(
-        func=lambda ns: run_script("build.sh", ns.args)
+    register_script_leaf(
+        subparsers,
+        name="build",
+        script="build.sh",
+        help_text="Configure & build the project (scripts/build.sh).",
     )
 
     # --- clean ---
-    p_clean = subparsers.add_parser(
-        "clean",
-        help="Clean build artifacts (wrapper around scripts/clean_build.sh)."
-    )
-    p_clean.add_argument(
-        "args",
-        nargs=argparse.REMAINDER,
-        help="Extra args passed through to clean_build.sh"
-    )
-    p_clean.set_defaults(
-        func=lambda ns: run_script("clean_build.sh", ns.args)
+    register_script_leaf(
+        subparsers,
+        name="clean",
+        script="clean_build.sh",
+        help_text="Clean CMake/Ninja build trees (scripts/clean_build.sh).",
     )
 
     # --- docs ---
-    p_docs = subparsers.add_parser(
-        "docs",
-        help="Build/serve docs (wrapper around scripts/build-docs.sh)."
-    )
-    p_docs.add_argument(
-        "args",
-        nargs=argparse.REMAINDER,
-        help="Extra args passed through to build-docs.sh"
-    )
-    p_docs.set_defaults(
-        func=lambda ns: run_script("build-docs.sh", ns.args)
+    register_script_leaf(
+        subparsers,
+        name="docs",
+        script="build_docs.sh",
+        help_text="Build and optionally serve docs (scripts/build_docs.sh).",
     )
 
     # --- test ---
     p_test = subparsers.add_parser(
         "test",
-        help="Run tests: unit, perf, or reg (wrappers around run_*.sh)."
+        help="Run tests: unit, perf, or reg (wrappers around run_*.sh).",
     )
     test_subparsers = p_test.add_subparsers(dest="which", required=True)
 
-    # test unit
-    p_test_unit = test_subparsers.add_parser(
-        "unit",
-        help="Run unit tests (scripts/run_unit_tests.sh)."
+    register_script_leaf(
+        test_subparsers,
+        name="unit",
+        script="run_unit_tests.sh",
+        help_text="Run unit tests (scripts/run_unit_tests.sh).",
     )
-    p_test_unit.add_argument(
-        "args",
-        nargs=argparse.REMAINDER,
-        help="Extra args passed through to run_unit_tests.sh"
+    register_script_leaf(
+        test_subparsers,
+        name="perf",
+        script="run_perf_tests.sh",
+        help_text="Run performance tests (scripts/run_perf_tests.sh).",
     )
-    p_test_unit.set_defaults(
-        func=lambda ns: run_script("run_unit_tests.sh", ns.args)
-    )
-
-    # test perf
-    p_test_perf = test_subparsers.add_parser(
-        "perf",
-        help="Run performance tests (scripts/run_perf_tests.sh)."
-    )
-    p_test_perf.add_argument(
-        "args",
-        nargs=argparse.REMAINDER,
-        help="Extra args passed through to run_perf_tests.sh"
-    )
-    p_test_perf.set_defaults(
-        func=lambda ns: run_script("run_perf_tests.sh", ns.args)
-    )
-
-    # test reg
-    p_test_reg = test_subparsers.add_parser(
-        "reg",
-        help="Run regression test suite (scripts/run_regression_tests.sh)."
-    )
-    p_test_reg.add_argument(
-        "args",
-        nargs=argparse.REMAINDER,
-        help="Extra args passed through to run_regression_tests.sh"
-    )
-    p_test_reg.set_defaults(
-        func=lambda ns: run_script("run_regression_tests.sh", ns.args)
+    register_script_leaf(
+        test_subparsers,
+        name="reg",
+        script="run_regression_tests.sh",
+        help_text="Run regression test suite (scripts/run_regression_tests.sh).",
     )
 
     # --- scaling ---
     p_scaling = subparsers.add_parser(
         "scaling",
-        help="Run or post-process scaling studies."
+        help="Run or post-process scaling studies.",
     )
     scaling_subparsers = p_scaling.add_subparsers(dest="which", required=True)
 
-    # scaling run
-    p_scaling_run = scaling_subparsers.add_parser(
-        "run",
-        help="Run scaling experiments (scripts/run_scaling.sh)."
+    register_script_leaf(
+        scaling_subparsers,
+        name="run",
+        script="run_scaling.sh",
+        help_text="Run scaling experiments (scripts/run_scaling.sh).",
     )
-    p_scaling_run.add_argument(
-        "args",
-        nargs=argparse.REMAINDER,
-        help="Extra args passed through to run_scaling.sh"
-    )
-    p_scaling_run.set_defaults(
-        func=lambda ns: run_script("run_scaling.sh", ns.args)
+    register_script_leaf(
+        scaling_subparsers,
+        name="post",
+        script="postprocess_scaling.py",
+        help_text="Post-process scaling CSVs (scripts/postprocess_scaling.py).",
+        use_python=True,
     )
 
-    # scaling post
-    p_scaling_post = scaling_subparsers.add_parser(
+    # --- clean-extern ---
+    register_script_leaf(
+        subparsers,
+        name="clean-extern",
+        script="clean_extern.sh",
+        help_text="Clean extern/ (scripts/clean_extern.sh).",
+    )
+
+    # --- fmt ---
+    register_script_leaf(
+        subparsers,
+        name="fmt",
+        script="format_all.sh",
+        help_text="Format C/C++/Fortran/CMake (scripts/format_all.sh).",
+    )
+
+    # --- prefetch ---
+    register_script_leaf(
+        subparsers,
+        name="prefetch",
+        script="prefetch_third_party.sh",
+        help_text="Prefetch third-party archives (scripts/prefetch_third_party.sh).",
+    )
+
+    # --- post (post-processing utilities) ---
+    p_post = subparsers.add_parser(
         "post",
-        help="Post-process scaling results (postprocess_scaling.py)."
+        help="Post-process simulation results (spectra, cavity, etc.).",
     )
-    p_scaling_post.add_argument(
-        "args",
-        nargs=argparse.REMAINDER,
-        help="Extra args passed through to postprocess_scaling.py"
-    )
-    p_scaling_post.set_defaults(
-        func=lambda ns: run_script("postprocess_scaling.py", ns.args, use_python=True)
-    )
+    post_subparsers = p_post.add_subparsers(dest="which", required=True)
 
-    # --- extern-clean ---
-    p_extclean = subparsers.add_parser(
-        "clean-extern",
-        help="Clean extern/ (wrapper around scripts/clean_extern.sh)."
+    register_script_leaf(
+        post_subparsers,
+        name="tgv-spectrum",
+        script="tgv_spectrum.py",
+        help_text="Compute isotropic TGV energy spectrum (scripts/tgv_spectrum.py).",
+        use_python=True,
     )
-    p_extclean.add_argument(
-        "args",
-        nargs=argparse.REMAINDER,
-        help="Extra args passed through to clean_extern.sh"
-    )
-    # NOTE: if your script is named clean_extern.sh instead, change here.
-    p_extclean.set_defaults(
-        func=lambda ns: run_script("clean_extern.sh", ns.args)
-    )
-
-    # --- fmt (format all) ---
-    p_fmt = subparsers.add_parser(
-        "fmt",
-        help="Format C/C++/Fortran/CMake (wrapper around scripts/format_all.sh)."
-    )
-    p_fmt.add_argument(
-        "args",
-        nargs=argparse.REMAINDER,
-        help="Extra args passed through to format_all.sh"
-    )
-    p_fmt.set_defaults(
-        func=lambda ns: run_script("format_all.sh", ns.args)
-    )
-
-    # --- prefetch (third-party deps) ---
-    p_prefetch = subparsers.add_parser(
-        "prefetch",
-        help="Prefetch third-party archives (wrapper around scripts/prefetch_third_party.sh)."
-    )
-    p_prefetch.add_argument(
-        "args",
-        nargs=argparse.REMAINDER,
-        help="Extra args passed through to prefetch_third_party.sh"
-    )
-    p_prefetch.set_defaults(
-        func=lambda ns: run_script("prefetch_third_party.sh", ns.args)
+    register_script_leaf(
+        post_subparsers,
+        name="ghia",
+        script="ldc_ghia.py",
+        help_text="Cavity regression vs Ghia et al. (scripts/ldc_ghia.py).",
+        use_python=True,
     )
 
     # --- examples ---
     p_examples = subparsers.add_parser(
         "examples",
-        help="Run real solver examples backed by regression cases."
+        help="Run real solver examples backed by regression cases.",
     )
     ex_subparsers = p_examples.add_subparsers(dest="which", required=True)
 
-    # examples run <case>
     p_ex_run = ex_subparsers.add_parser(
         "run",
         help=(
             "Run a named example case (e.g. tgv128, channel128) "
             "by filtering regression tests."
-        )
+        ),
     )
     p_ex_run.add_argument(
         "case",
-        help="Example/regression case name (e.g. tgv128)"
-    )
-    p_ex_run.add_argument(
-        "args",
-        nargs=argparse.REMAINDER,
-        help=(
-            "Extra args passed through to run_regression_tests.sh "
-            "(e.g. SKIP_BUILD=1 via env or extra CTest knobs)."
-        )
-    )
-    p_ex_run.set_defaults(
-        func=lambda ns: run_regression_case(ns.case, ns.args)
+        help="Example/regression case name (e.g. tgv128)",
     )
 
-    # Parse and dispatch
-    ns = parser.parse_args()
-    ns.func(ns)
+    def _examples_run(ns, extra):
+        run_regression_case(ns.case, extra)
+
+    p_ex_run.set_defaults(func=_examples_run)
+
+    # --- parse + dispatch (IMPORTANT: parse_known_args) ---
+    ns, extra = parser.parse_known_args()
+    # extra = arguments not consumed by argparse (e.g. --help, script flags)
+    ns.func(ns, extra)
 
 
 if __name__ == "__main__":

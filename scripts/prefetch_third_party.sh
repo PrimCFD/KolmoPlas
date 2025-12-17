@@ -9,22 +9,40 @@ PREFETCH_MPI="${PREFETCH_MPI:-}"
 # Enable PETSc/MUMPS download URL discovery (parallel LU stack)
 PREFETCH_MUMPS="${PREFETCH_MUMPS:-1}"
 
+usage() {
+  cat <<'EOF'
+Usage: scripts/prefetch_third_party.sh [options]
+
+Configure CMake with -DPREFETCH_THIRD_PARTY=ON, download declared third-party
+sources, package them into reproducible archives under extern/, and write
+MANIFEST.prefetch + SHA256SUMS. Optionally prefetch PETSc/MUMPS-related
+tarballs for fully offline PETSc builds.
+
+Options:
+  --mpi=mpich         Cache MPICH tarballs for PETSc offline configure.
+  --mpi=none          Do not cache any MPI vendor (default).
+  --mumps             Also cache MUMPS + ScaLAPACK/BLACS + ParMETIS/METIS
+                      (and related PETSc-listed archives).
+  -h, --help          Show this help message and exit.
+
+Environment (equivalent to flags):
+  PREFETCH_MPI=mpich  Same as --mpi=mpich.
+  PREFETCH_MUMPS=1    Same as --mumps.
+
+Examples:
+  scripts/prefetch_third_party.sh
+  PREFETCH_MPI=mpich scripts/prefetch_third_party.sh
+  scripts/prefetch_third_party.sh --mpi=mpich --mumps
+EOF
+}
+
+
 for arg in "$@"; do
   case "$arg" in
     --mpi=mpich) PREFETCH_MPI="mpich" ;;
     --mpi=none|--mpi=system|--mpi="") PREFETCH_MPI="" ;;
     --mumps) PREFETCH_MUMPS="1" ;;
-    -h|--help)
-      cat <<EOF
-Usage: $(basename "$0") [--mpi=mpich|none] [--mumps]
-  --mpi=mpich  Cache MPICH tarballs for PETSc offline configure
-  --mpi=none   Do not cache an MPI (default); PETSc will use system MPI at build time
-  --mumps      Also cache MUMPS + ScaLAPACK/BLACS + ParMETIS/METIS (+PT-Scotch/Scotch)
-Environment:
-  PREFETCH_MPI=mpich   Same as --mpi=mpich
-  PREFETCH_MUMPS=1     Same as --mumps
-EOF
-      exit 0;;
+    -h|--help) usage; exit 0 ;;
   esac
 done
 

@@ -2,6 +2,39 @@
 # Format C/C++, Fortran, and CMake files in THIS repo (skip vendor/build dirs)
 set -euo pipefail
 
+usage() {
+  cat <<'EOF'
+Usage: scripts/format_all.sh [options]
+
+Run code formatters for C/C++, Fortran, and CMake in this repo, skipping
+vendor and build trees.
+
+Options:
+  -h, --help           Show this help message and exit.
+
+Environment:
+  STRICT=0|1           When set to 1, treat missing/failed formatters as fatal
+                       and exit with non-zero status (default: 0).
+
+Tools:
+  - C/C++:      clang-format
+  - Fortran:    fprettify
+  - CMake:      cmake-format
+
+Examples:
+  scripts/format_all.sh
+  STRICT=1 scripts/format_all.sh
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $1"; usage; exit 2 ;;
+  esac
+  shift
+done
+
 cd "$(dirname "$0")/.."
 
 STRICT=${STRICT:-0}

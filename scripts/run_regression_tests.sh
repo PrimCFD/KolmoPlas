@@ -1,24 +1,39 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Build (optional) and run *regression/integration* tests using build.sh
-#
-# Env (all optional, same model as other runners):
-#   BUILD_DIR           default: build-regression
-#   SKIP_BUILD          0|1 (default 0)
-#   CMAKE_BUILD_TYPE    Debug|Release|RelWithDebInfo|MinSizeRel (default Release)
-#   ENABLE_CUDA         ON|OFF (default OFF)       # forwarded; usually OFF here
-#   CTEST_PARALLEL_LEVEL  integer (default: nproc or 2)
-#   CTEST_TIMEOUT       seconds (default 900)
-#   REPORT_DIR          default: $BUILD_DIR/test-reports/regression
-#   LABEL_RE            ctest --label-regex (default "regression")
-#   CTEST_NAME_REGEX    if set, use ctest -R <regex> instead of -L (default unset)
-#   EXTRA_CMAKE_ARGS_USER  extra args appended to CMake (optional)
-#
-# Examples:
-#   ./scripts/run_regression_tests.sh
-#   SKIP_BUILD=1 ./scripts/run_regression_tests.sh
-#   LABEL_RE='regression|integ' ./scripts/run_regression_tests.sh
-#   CTEST_NAME_REGEX='^integ::' ./scripts/run_regression_tests.sh
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/run_regression_tests.sh [options]
+
+Configure and build (optional) with MPI enabled and run MPI regression tests
+via CTest (label: regression), using scripts/mpi_env.sh for consistent MPI
+launcher setup on laptops and clusters.
+
+Options:
+  -h, --help           Show this help message and exit.
+
+Environment:
+  BUILD_DIR            Build directory (default: build-regression).
+  SKIP_BUILD           0|1 to skip the build step (default: 0).
+  CTEST_PARALLEL_LEVEL Number of tests to run in parallel (default: CPU count).
+  CTEST_TIMEOUT        Per-test timeout in seconds (default: 900).
+  REPORT_DIR           Output directory for JUnit XML
+                       (default: $BUILD_DIR/test-reports/regression).
+  CMAKE_BUILD_TYPE     Build type (default: Release).
+  MPI_MODE             auto|emulate|cluster for mpi_env.sh (default: auto).
+  CTEST_NAME_REGEX     Optional CTest name regex to filter which tests run
+                       (used by kolmoplas examples run).
+  EXTRA_CMAKE_ARGS     Extra CMake args, including MPI/test toggles.
+  EXTRA_CMAKE_ARGS_USER Extra user-provided CMake args.
+
+Examples:
+  scripts/run_regression_tests.sh
+  SKIP_BUILD=1 scripts/run_regression_tests.sh
+  CTEST_NAME_REGEX='regression::fluids::tgv128::run' scripts/run_regression_tests.sh
+EOF
+}
+
 
 # Set MPI env
 if [[ -f "scripts/mpi_env.sh" ]]; then

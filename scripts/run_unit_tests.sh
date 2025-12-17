@@ -1,6 +1,44 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Build (optional) and run *unit* tests using build.sh
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/run_unit_tests.sh [options]
+
+Build (optional) and run unit tests via CTest, writing JUnit XML under
+$BUILD_DIR/test-reports/unit/.
+
+Options:
+  -h, --help           Show this help message and exit.
+
+Environment:
+  BUILD_DIR            Build directory (default: build-unit).
+  SKIP_BUILD           0|1 to skip the build step (default: 0).
+  CTEST_PARALLEL_LEVEL Number of tests to run in parallel (default: CPU count).
+  CTEST_TIMEOUT        Per-test timeout in seconds (default: 900).
+  REPORT_DIR           Output directory for JUnit XML
+                       (default: $BUILD_DIR/test-reports/unit).
+  CMAKE_BUILD_TYPE     Build type for the unit-test build (default: Debug).
+  ENABLE_CUDA          ON/OFF (default: OFF for unit tests).
+  USE_CUDA_UM          ON/OFF (default: OFF).
+  EXTRA_CMAKE_ARGS     Extra flags appended to CMake configure.
+  EXTRA_CMAKE_ARGS_USER Extra user-provided CMake args.
+
+Examples:
+  scripts/run_unit_tests.sh
+  SKIP_BUILD=1 scripts/run_unit_tests.sh
+  BUILD_DIR=build-debug CTEST_PARALLEL_LEVEL=8 scripts/run_unit_tests.sh
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $1"; usage; exit 2 ;;
+  esac
+  shift
+done
+
 
 BUILD_DIR=${BUILD_DIR:-build-unit}
 SKIP_BUILD=${SKIP_BUILD:-0}

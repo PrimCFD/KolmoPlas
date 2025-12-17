@@ -1,18 +1,41 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# -------------------------------------------------
-# build-docs.sh — lightweight docs builder/previewer
-# -------------------------------------------------
-# Features
-#  • Build *only* the documentation (Doxygen XML + Sphinx HTML)
-#  • Avoid configuring or building the full CMake project
-#  • Usable locally and in CI/GitHub Actions
-#  • Minimal rebuilds where possible
-#
-# Usage
-#  ./scripts/build-docs.sh [--clean] [--force] [--no-doxygen] [--serve [--port N]] [--open]
-#  CI example: ./scripts/build-docs.sh --force
+usage() {
+  cat <<'EOF'
+Usage: scripts/build_docs.sh [options]
+
+Build Doxygen XML + Sphinx HTML documentation into build-docs/, and optionally
+serve it via a simple HTTP server for local preview.
+
+Options:
+  --clean              Remove previous docs build and generated API stubs first.
+  --force              Force a full rebuild even if nothing seems out of date.
+  --no-doxygen         Skip the Doxygen XML step and reuse existing XML.
+  --serve              Start a local HTTP server for the built HTML.
+  --port PORT          Port for --serve (default: 8000).
+  --open               Open a browser tab pointing at the local docs.
+  -q, --quiet          Reduce log verbosity.
+  -h, --help           Show this help message and exit.
+
+Notes:
+  - The docs tree is built under build-docs/docs/ to match docs/conf.py.
+  - Doxygen and sphinx-build must be available unless --no-doxygen is used.
+
+Examples:
+  scripts/build_docs.sh
+  scripts/build_docs.sh --force
+  scripts/build_docs.sh --serve --open --port 8001
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $1"; usage; exit 2 ;;
+  esac
+  shift
+done
 
 here_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Find repo root by walking up
