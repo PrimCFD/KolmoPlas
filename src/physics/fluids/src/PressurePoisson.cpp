@@ -1413,22 +1413,113 @@ static void build_hierarchy(PPImpl& impl, MPI_Comm user_comm_in, const PBC& pbc,
                  /*lx*/ lx.data(), /*ly*/ ly.data(), /*lz*/ lz.data(), &impl.da_fine);
 
     // --------------------------------------------------------------------
-    // Anisotropic refinement/coarsening factors:
-    //   - Default 2x in each direction
-    //   - Collapsed axes (global interior size == 1) get factor 1 so that
-    //     DMCoarsen/DMCreateInterpolation never try to coarsen through the
-    //     thin direction (semi-coarsening in x/y only).
-    // This plugs directly into DMDA's DMCoarsen_DA / DMCoarsenHierarchy
-    // logic via dd->coarsen_{x,y,z}.
+    // DMDA coarsening helpers (mirrors DMCoarsen_DA sizing) and DMDA_Q0 checks.
+    //
+    // Note: DMDASetRefinementFactor() only sets dd->refine_{x,y,z}. DMCoarsen()
+    // uses dd->coarsen_{x,y,z}, which PETSc populates from options (and, for
+    // per-level control, from -da_refine_hierarchy_{x,y,z}). :contentReference[oaicite:1]{index=1}
     // --------------------------------------------------------------------
-    PetscInt rx = (impl.nxi_glob > 1) ? 2 : 1;
-    PetscInt ry = (impl.nyi_glob > 1) ? 2 : 1;
-    PetscInt rz = (impl.nzi_glob > 1) ? 2 : 1; // collapsed slab -> 1
-    PetscCallAbort(comm, DMDASetRefinementFactor(impl.da_fine, rx, ry, rz));
+    auto dmda_next_size = [](PetscInt n, PetscInt cf) -> PetscInt
+    {
+        if (cf <= 1 || n <= 1)
+            return n;
+        // Match DMCoarsen_DA: n2 = ((n - 1)/cf) + 1 when n > cf, else n
+        if (n <= cf)
+            return n;
+        return ((n - 1) / cf) + 1;
+    };
+
+    auto dmda_q0_compatible = [dmda_next_size](PetscInt n, PetscInt cf) -> bool
+    {
+        if (n <= 0)
+            return false;
+        const PetscInt n2 = dmda_next_size(n, cf);
+        if (n2 <= 0)
+            return false;
+        return (n % n2) == 0;
+    };
+
+    auto can_coarsen_once = [dmda_next_size, dmda_q0_compatible](PetscInt n, PetscInt nprocs,
+                                                                 PetscInt cf) -> bool
+    {
+        const PetscInt n2 = dmda_next_size(n, cf);
+        if (n2 == n)
+            return false;
+        // DMDA_Q0 interpolation requires: if fine has >1, coarse must have >=2
+        if (n > 1 && n2 < 2)
+            return false;
+        return (n2 >= nprocs) && dmda_q0_compatible(n, cf);
+    };
+
+    // --------------------------------------------------------------------
+    // Programmatic anisotropic coarsening schedule:
+    // Build (cx,cy,cz) per coarsen step, then inject as
+    // -da_refine_hierarchy_{x,y,z} before DMSetFromOptions().
+    // --------------------------------------------------------------------
+    std::vector<PetscInt> hx, hy, hz;
+    {
+        PetscInt Mc = nxi, Nc = nyi, Pc = nzi;
+        for (int step = 0; step < 64; ++step)
+        {
+            const PetscInt cx = (impl.nxi_glob > 1 && can_coarsen_once(Mc, px, 2)) ? 2 : 1;
+            const PetscInt cy = (impl.nyi_glob > 1 && can_coarsen_once(Nc, py, 2)) ? 2 : 1;
+            const PetscInt cz = (impl.nzi_glob > 1 && can_coarsen_once(Pc, pz, 2)) ? 2 : 1;
+            if (cx == 1 && cy == 1 && cz == 1)
+                break;
+            hx.push_back(cx);
+            hy.push_back(cy);
+            hz.push_back(cz);
+            Mc = dmda_next_size(Mc, cx);
+            Nc = dmda_next_size(Nc, cy);
+            Pc = dmda_next_size(Pc, cz);
+        }
+    }
+
+    auto join_ints = [](const std::vector<PetscInt>& v) -> std::string
+    {
+        if (v.empty())
+            return "1";
+        std::string s;
+        s.reserve(v.size() * 2);
+        for (std::size_t i = 0; i < v.size(); ++i)
+        {
+            if (i)
+                s.push_back(',');
+            s += std::to_string((long long) v[i]);
+        }
+        return s;
+    };
+
+    // Only inject schedules if the user has not explicitly provided them.
+    {
+        PetscBool has_hx = PETSC_FALSE, has_hy = PETSC_FALSE, has_hz = PETSC_FALSE;
+        PetscBool has_rx = PETSC_FALSE, has_ry = PETSC_FALSE, has_rz = PETSC_FALSE;
+        PetscCallAbort(comm, PetscOptionsHasName(NULL, NULL, "-da_refine_hierarchy_x", &has_hx));
+        PetscCallAbort(comm, PetscOptionsHasName(NULL, NULL, "-da_refine_hierarchy_y", &has_hy));
+        PetscCallAbort(comm, PetscOptionsHasName(NULL, NULL, "-da_refine_hierarchy_z", &has_hz));
+        PetscCallAbort(comm, PetscOptionsHasName(NULL, NULL, "-da_refine_x", &has_rx));
+        PetscCallAbort(comm, PetscOptionsHasName(NULL, NULL, "-da_refine_y", &has_ry));
+        PetscCallAbort(comm, PetscOptionsHasName(NULL, NULL, "-da_refine_z", &has_rz));
+
+        if (!has_hx && !has_rx)
+            PetscCallAbort(
+                comm, PetscOptionsSetValue(NULL, "-da_refine_hierarchy_x", join_ints(hx).c_str()));
+        if (!has_hy && !has_ry)
+            PetscCallAbort(
+                comm, PetscOptionsSetValue(NULL, "-da_refine_hierarchy_y", join_ints(hy).c_str()));
+        if (!has_hz && !has_rz)
+            PetscCallAbort(
+                comm, PetscOptionsSetValue(NULL, "-da_refine_hierarchy_z", join_ints(hz).c_str()));
+    }
+
+    // Default refine factors (used if no hierarchy/options are set)
+    const PetscInt rx0 = hx.empty() ? 1 : hx.front();
+    const PetscInt ry0 = hy.empty() ? 1 : hy.front();
+    const PetscInt rz0 = hz.empty() ? 1 : hz.front();
+    PetscCallAbort(comm, DMDASetRefinementFactor(impl.da_fine, rx0, ry0, rz0));
 
     // Allow -da_* options at runtime for debugging/overrides
     DMSetFromOptions(impl.da_fine);
-
     DMSetUp(impl.da_fine);
 
     // Sanity: the process grid must not exceed the per-axis cell counts.
@@ -1489,80 +1580,29 @@ static void build_hierarchy(PPImpl& impl, MPI_Comm user_comm_in, const PBC& pbc,
 
     impl.da_lvl.clear();
     {
-        // Build hierarchy but stop BEFORE a coarse level would violate proc-per-axis counts.
-        // If a prospective (M2,N2,P2) would have M2 < px (or Y/Z analogues), stop coarsening.
-        PetscInt M = 0, N = 0, P = 0, px = 0, py = 0, pz = 0;
-        DMDAGetInfo(impl.da_fine, nullptr, &M, &N, &P, &px, &py, &pz, nullptr, nullptr, nullptr,
-                    nullptr, nullptr, nullptr);
-
         DM cur = impl.da_fine;
         PetscObjectReference((PetscObject) cur);
         std::vector<DM> chain_f2c;
         chain_f2c.push_back(cur);
         while (true)
         {
-            // Check prospective sizes *before* asking PETSc to coarsen.
-            PetscInt Mc = 0, Nc = 0, Pc = 0, px_c = 0, py_c = 0, pz_c = 0;
-            DMDAGetInfo(cur, nullptr, &Mc, &Nc, &Pc, &px_c, &py_c, &pz_c, nullptr, nullptr, nullptr,
-                        nullptr, nullptr, nullptr);
-
-            // Recompute desired refinement/coarsen factors on THIS level.
-            // Axes with a single cell (e.g. slab in z) get factor 1 so they
-            // never coarsen; others use 2x.
-            PetscInt cx = (Mc > 2) ? 2 : 1;
-            PetscInt cy = (Nc > 2) ? 2 : 1;
-            PetscInt cz = (Pc > 2) ? 2 : 1;
-
-            // Keep the DMDA's internal coarsen factors in sync with our policy.
-            DMDASetRefinementFactor(cur, cx, cy, cz);
-
-            const PetscInt Mc2 = dmda_next_size(Mc, cx);
-            const PetscInt Nc2 = dmda_next_size(Nc, cy);
-            const PetscInt Pc2 = dmda_next_size(Pc, cz);
-
-            const bool x_will = (Mc2 < Mc);
-            const bool y_will = (Nc2 < Nc);
-            const bool z_will = (Pc2 < Pc);
-
-            const bool any_will = x_will || y_will || z_will;
-
-            // PETSc DMCreateInterpolation_DA() requirement for Q0:
-            // if the fine grid has > 1 cell along an axis, the coarse grid must have >= 2.
-            auto ok_pair = [](PetscInt fine, PetscInt coarse) -> bool
-            {
-                // For Q0 interpolation we require:
-                // - if fine has >1 point, coarse must have at least 2 points
-                if (fine > 1 && coarse < 2)
-                    return false;
-                // Additionally, avoid fine>1 -> coarse==1 transitions explicitly
-                // (very thin anisotropic grids can sneak in otherwise)
-                if (fine > 1 && coarse == 1)
-                    return false;
-                return true;
-            };
-
-            const bool x_ok =
-                !x_will || (ok_pair(Mc, Mc2) && Mc2 >= px_c && dmda_q0_compatible(Mc, cx));
-
-            const bool y_ok =
-                !y_will || (ok_pair(Nc, Nc2) && Nc2 >= py_c && dmda_q0_compatible(Nc, cy));
-
-            const bool z_ok =
-                !z_will || (ok_pair(Pc, Pc2) && Pc2 >= pz_c && dmda_q0_compatible(Pc, cz));
-
-            // Stop if:
-            //  - no axis will actually be coarsened any further, or
-            //  - some axis that would be coarsened would violate the proc layout
-            //    or the DMDA_Q0 multiple-of-coarse condition.
-            if (!any_will || !(x_ok && y_ok && z_ok))
-            {
-                break;
-            }
-
             DM next = NULL;
             PetscErrorCode ierr = DMCoarsen(cur, MPI_COMM_NULL, &next);
             if (ierr || !next)
                 break;
+
+            // Defensive: if PETSc decides the coarsen is a no-op (all factors 1), stop.
+            PetscInt Mc = 0, Nc = 0, Pc = 0;
+            PetscInt Mc2 = 0, Nc2 = 0, Pc2 = 0;
+            DMDAGetInfo(cur, nullptr, &Mc, &Nc, &Pc, nullptr, nullptr, nullptr, nullptr, nullptr,
+                        nullptr, nullptr, nullptr, nullptr);
+            DMDAGetInfo(next, nullptr, &Mc2, &Nc2, &Pc2, nullptr, nullptr, nullptr, nullptr,
+                        nullptr, nullptr, nullptr, nullptr, nullptr);
+            if (Mc2 == Mc && Nc2 == Nc && Pc2 == Pc)
+            {
+                DMDestroy(&next);
+                break;
+            }
 
             chain_f2c.push_back(next);
             cur = next;
